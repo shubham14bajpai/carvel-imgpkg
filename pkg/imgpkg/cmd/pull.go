@@ -5,16 +5,15 @@ package cmd
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-
 	"github.com/cppforlife/go-cli-ui/ui"
 	regname "github.com/google/go-containerregistry/pkg/name"
 	ctlimg "github.com/k14s/imgpkg/pkg/imgpkg/image"
 	lf "github.com/k14s/imgpkg/pkg/imgpkg/lockfiles"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 )
 
 type PullOptions struct {
