@@ -132,38 +132,12 @@ func TestPullingAnImage(t *testing.T) {
 }
 
 func TestPullingABundle(t *testing.T) {
-	adds := make([]mutate.Addendum, 0, 5)
 	layer, err := createImgPkgLayer()
 	if err != nil {
 		t.Fatalf("Unable to create an img pkg layer: %s", err)
-
 	}
 
-	adds = append(adds, mutate.Addendum{
-		Layer: layer,
-		History: v1.History{
-			Author:    "imgpkg",
-			CreatedBy: "imgpkg",
-			Created:   v1.Time{time.Now()},
-		},
-	})
-	img := empty.Image
-	configFile, err := img.ConfigFile()
-	configFile.Config.Labels = map[string]string{image.BundleConfigLabel: "true"}
-
-	digest, err := img.Digest()
-	println(fmt.Sprintf(">>%v<<", digest))
-
-	img, err = mutate.Append(img, adds...)
-	if err != nil {
-		t.Fatalf("Unable to append a layer to our test image: %s", err)
-	}
-
-	if err != nil {
-		t.Fatalf("Unable to get the config file from our test image: %s", err)
-	}
-
-	//set the config - cfg.Config.Labels[image.BundleConfigLabel]
+	img := createAnEmptyBundle(layer, t)
 
 	expectedRepo := "foo/bar"
 	fakeRegistry := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -194,7 +168,6 @@ func TestPullingABundle(t *testing.T) {
 			println(fmt.Sprintf("Unexpected path: %v", r.URL.Path))
 		}
 	}))
-
 	defer fakeRegistry.Close()
 
 	uri, err := url.Parse(fakeRegistry.URL)
@@ -231,55 +204,9 @@ func TestPullingABundle(t *testing.T) {
 		t.Fatalf("Expected specific log messages; diff expected...actual:\n%v\n", logDiff)
 	}
 
-	outputDir, err := os.Open(workingDir)
-	if err != nil {
-		t.Fatalf("Failed to open output path directory: %s", err)
+	if !strings.Contains(fakeUI.Said[0], "improved log") {
+		t.Fatalf("%v", diffText(fakeUI.Said[0], "improved log"))
 	}
-	defer outputDir.Close()
-
-	outputFiles, err := outputDir.Readdir(-1)
-	if err != nil {
-		t.Fatalf("Failed to read files in output path directory: %s", err)
-	}
-	if len(outputFiles) != 1 {
-		t.Fatalf("Incorrect number of files in output path directory. Expected 1, got: %d", len(outputFiles))
-	}
-
-	writtenFileName := outputFiles[0].Name()
-	if !strings.Contains(writtenFileName, "random_file_") {
-		t.Fatalf("Incorrect file name of written image. Got: %s", writtenFileName)
-	}
-
-	if outputFiles[0].Size() != 1024 {
-		t.Fatalf("Incorrect pulled file size. Expected 1024, got: %d", outputFiles[0].Size())
-	}
-
-	//if !strings.Contains(fakeUI.Said, "improved log") {
-	//fail
-}
-
-func createImgPkgLayer() (v1.Layer, error) {
-	// Hash the contents as we write it out to the buffer.
-	var b *bytes.Buffer
-	hasher := sha256.New()
-
-	tarContents, err := ioutil.ReadFile("test.tar")
-	if err != nil {
-		return nil, err
-	}
-	b = bytes.NewBuffer(tarContents)
-	hasher.Write(tarContents)
-
-	h := v1.Hash{
-		Algorithm: "sha256",
-		Hex:       hex.EncodeToString(hasher.Sum(make([]byte, 0, hasher.Size()))),
-	}
-
-	return partial.UncompressedToLayer(&uncompressedLayer{
-		diffID:    h,
-		mediaType: types.DockerLayer,
-		content:   b.Bytes(),
-	})
 }
 
 func TestNoImageOrBundleOrLockError(t *testing.T) {
@@ -304,6 +231,53 @@ func TestImageAndBundleAndLockError(t *testing.T) {
 	if !strings.Contains(err.Error(), "Expected only one of image, bundle, or lock") {
 		t.Fatalf("Expected error to contain message about invalid flags, got: %s", err)
 	}
+}
+
+func createAnEmptyBundle(layer v1.Layer, t *testing.T) v1.Image {
+	var err error
+	img := empty.Image
+	img, err = mutate.Append(img, mutate.Addendum{
+		Layer: layer,
+		History: v1.History{
+			Author:    "imgpkg",
+			CreatedBy: "imgpkg",
+			Created:   v1.Time{time.Now()},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Unable to append a layer to our test image: %s", err)
+	}
+	img, err = mutate.Config(img, v1.Config{
+		Labels: map[string]string{image.BundleConfigLabel: "true"},
+	})
+	if err != nil {
+		t.Fatalf("Unable to add labels to our test image: %s", err)
+	}
+	return img
+}
+
+func createImgPkgLayer() (v1.Layer, error) {
+	// Hash the contents as we write it out to the buffer.
+	var b *bytes.Buffer
+	hasher := sha256.New()
+
+	tarContents, err := ioutil.ReadFile("test.tar")
+	if err != nil {
+		return nil, err
+	}
+	b = bytes.NewBuffer(tarContents)
+	hasher.Write(tarContents)
+
+	h := v1.Hash{
+		Algorithm: "sha256",
+		Hex:       hex.EncodeToString(hasher.Sum(make([]byte, 0, hasher.Size()))),
+	}
+
+	return partial.UncompressedToLayer(&uncompressedLayer{
+		diffID:    h,
+		mediaType: types.DockerLayer,
+		content:   b.Bytes(),
+	})
 }
 
 func TestInvalidBundleLockKind(t *testing.T) {
@@ -436,17 +410,14 @@ type uncompressedLayer struct {
 	content   []byte
 }
 
-// DiffID implements partial.UncompressedLayer
 func (ul *uncompressedLayer) DiffID() (v1.Hash, error) {
 	return ul.diffID, nil
 }
 
-// Uncompressed implements partial.UncompressedLayer
 func (ul *uncompressedLayer) Uncompressed() (io.ReadCloser, error) {
 	return ioutil.NopCloser(bytes.NewBuffer(ul.content)), nil
 }
 
-// MediaType returns the media type of the layer
 func (ul *uncompressedLayer) MediaType() (types.MediaType, error) {
 	return ul.mediaType, nil
 }
