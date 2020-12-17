@@ -35,41 +35,11 @@ import (
 )
 
 func TestPullingAnImage(t *testing.T) {
+	// setup test
+	userAndRepoInFakeRegistry := "foo/bar"
 	img := randomImage(t)
-	layers, err := img.Layers()
-	if err != nil {
-		t.Fatalf("Failed to get layers from created image %s", err)
-	}
-	layer := layers[0]
 
-	expectedRepo := "foo/bar"
-	fakeRegistry := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		layerDigest := mustManifest(t, img).Layers[0].Digest
-		configPath := fmt.Sprintf("/v2/%s/blobs/%s", expectedRepo, mustConfigName(t, img))
-		manifestPath := fmt.Sprintf("/v2/%s/manifests/latest", expectedRepo)
-		layerPath := fmt.Sprintf("/v2/%s/blobs/%s", expectedRepo, layerDigest)
-
-		switch r.URL.Path {
-		case "/v2/":
-			w.WriteHeader(http.StatusOK)
-		case configPath:
-			w.Write(mustRawConfigFile(t, img))
-		case manifestPath:
-			w.Write(mustRawManifest(t, img))
-		case layerPath:
-			compressed, err := layer.Compressed()
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := io.Copy(w, compressed); err != nil {
-				t.Fatal(err)
-			}
-			w.WriteHeader(http.StatusOK)
-		default:
-			println(fmt.Sprintf("Unexpected path: %v", r.URL.Path))
-		}
-	}))
-
+	fakeRegistry := createFakeOCIRegistry(t, img, userAndRepoInFakeRegistry, "")
 	defer fakeRegistry.Close()
 
 	uri, err := url.Parse(fakeRegistry.URL)
@@ -77,27 +47,26 @@ func TestPullingAnImage(t *testing.T) {
 		t.Fatalf("Unable to get url from test registry %s", err)
 	}
 
-	tempPath := os.TempDir()
-	workingDir := filepath.Join(tempPath, "pull-image")
-	err = os.Mkdir(workingDir, 0700)
-	defer Cleanup(workingDir)
-
+	workingDir, err := ioutil.TempDir(os.TempDir(), "pull-image")
 	if err != nil {
 		t.Fatalf("Failed to create test directory: %s: %s", workingDir, err)
 	}
+	defer Cleanup(workingDir)
 
 	fakeUI := &fakes.FakeUI{}
 	pull := PullOptions{
 		ui:         fakeUI,
-		ImageFlags: ImageFlags{fmt.Sprintf("%s/%s", uri.Host, expectedRepo)},
+		ImageFlags: ImageFlags{fmt.Sprintf("%s/%s", uri.Host, userAndRepoInFakeRegistry)},
 		OutputPath: workingDir,
 	}
 
+	// test subject
 	err = pull.Run()
 	if err != nil {
-		t.Fatalf("Expected validations not to err, but did %s", err)
+		t.Fatalf("Expected not to err, but did %s", err)
 	}
 
+	// assertions
 	expectedLines := strings.Join([]string{"Pulling image 'LOCAL_REGISTRY/foo/bar@sha256:REPLACED_SHA'\n", "Extracting layer 'sha256:REPLACED_SHA' (1/1)\n"}, "\n")
 	actualLines := replaceShaAndRegistryWithConstants(fakeUI, uri.Host)
 
@@ -130,10 +99,11 @@ func TestPullingAnImage(t *testing.T) {
 	}
 }
 
-func TestPullingABundle(t *testing.T) {
+func TestPullingABundleWhichRewritesTheLockfileProducesHelpfulOutput(t *testing.T) {
 	// setup test
 	manifestFromTheBundleImageLockfile := "fake OCI manifest that is referenced by the bundle's imageLock file"
-	dir := createTestBundleOnDisk(manifestFromTheBundleImageLockfile, t)
+	imageUsedInTestBundle := "index.docker.io/fake/a"
+	dir := createTestBundleOnDisk(imageUsedInTestBundle, manifestFromTheBundleImageLockfile, t)
 	defer Cleanup(dir)
 
 	userAndRepoInFakeRegistry := "foo/bar"
@@ -157,20 +127,28 @@ func TestPullingABundle(t *testing.T) {
 	// test subject
 	err = pull.Run()
 	if err != nil {
-		t.Fatalf("Expected validations not to err, but did %s", err)
+		t.Fatalf("Expected not to err, but did %s", err)
 	}
 
 	// assertions
-	expectedLines := strings.Join([]string{"Pulling image 'LOCAL_REGISTRY/foo/bar@sha256:REPLACED_SHA'\n", "Extracting layer 'sha256:REPLACED_SHA' (1/1)\n"}, "\n")
+	lockfileRewriteLogMessageLine1 := fmt.Sprintf("The bundle repo (%s) is hosting every image specified in the bundle's Image Lock File (.imgpkg/images.yml)\n", filepath.Join("LOCAL_REGISTRY", userAndRepoInFakeRegistry))
+	lockfileRewriteLogMessageLine2 := fmt.Sprintf("Updating the lock file: %s\n", filepath.Join(dir, ".imgpkg/images.yml"))
+	lockfileRewriteLogMessageLine3 := fmt.Sprintf("+++ image: %s@sha256:REPLACED_SHA was rewritten to %s@sha256:REPLACED_SHA\n", imageUsedInTestBundle, filepath.Join("LOCAL_REGISTRY", userAndRepoInFakeRegistry))
+
+	expectedLines := strings.Join([]string{
+		"Pulling image 'LOCAL_REGISTRY/foo/bar@sha256:REPLACED_SHA'\n",
+		"Extracting layer 'sha256:REPLACED_SHA' (1/1)\n",
+		"Locating image lock file images...\n",
+		lockfileRewriteLogMessageLine1,
+		lockfileRewriteLogMessageLine2,
+		lockfileRewriteLogMessageLine3,
+	}, "\n",
+	)
 	actualLines := replaceShaAndRegistryWithConstants(fakeUI, uri.Host)
 
 	logDiff := diffText(expectedLines, actualLines)
 	if logDiff != "" {
 		t.Fatalf("Expected specific log messages; diff expected...actual:\n%v\n", logDiff)
-	}
-
-	if !strings.Contains(fakeUI.Said[0], "improved log") {
-		t.Fatalf("%v", diffText(fakeUI.Said[0], "improved log"))
 	}
 }
 
@@ -217,14 +195,13 @@ func createFakeOCIRegistry(t *testing.T, img v1.Image, expectedRepo string, mani
 			if err != nil {
 				t.Fatal(err)
 			}
-			compressed, err :=  layers[0].Compressed()
+			compressed, err := layers[0].Compressed()
 			if err != nil {
 				t.Fatal(err)
 			}
 			if _, err := io.Copy(w, compressed); err != nil {
 				t.Fatal(err)
 			}
-			w.WriteHeader(http.StatusOK)
 		default:
 			w.Write([]byte(manifestFromTheBundleImageLockfile))
 		}
@@ -232,7 +209,7 @@ func createFakeOCIRegistry(t *testing.T, img v1.Image, expectedRepo string, mani
 	return fakeRegistry
 }
 
-func createTestBundleOnDisk(manifestFromTheBundleImageLockfile string, t *testing.T) string {
+func createTestBundleOnDisk(imageName string, manifestFromTheBundleImageLockfile string, t *testing.T) string {
 	sha256OfManifestFromTheBundleImageLockfile, _, err := v1.SHA256(bytes.NewReader([]byte(manifestFromTheBundleImageLockfile)))
 	if err != nil {
 		t.Fatalf("Unable to generate digest needed for images.yml: %s", err)
@@ -249,7 +226,7 @@ kind: ""
 spec:
   images:
   - annotations: null
-    image: index.docker.io/fake/a@%s`, sha256OfManifestFromTheBundleImageLockfile)), os.ModePerm)
+    image: %s@%s`, imageName, sha256OfManifestFromTheBundleImageLockfile)), os.ModePerm)
 	if err != nil {
 		t.Fatalf("Unable to create the images.yml file: %s", err)
 	}

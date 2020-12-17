@@ -181,6 +181,7 @@ func (o *PullOptions) rewriteImageLock(ref regname.Reference, registry ctlimg.Re
 	bundleRepo := ref.Context().Name()
 	inBundleRepo := 0
 	var newImgDescs []lf.ImageDesc
+	rewrittenImages := map[string]string{}
 	for _, img := range lockFile.Spec.Images {
 		bundleRepoImgRef, err := ImageWithRepository(img.Image, bundleRepo)
 		if err != nil {
@@ -197,6 +198,7 @@ func (o *PullOptions) rewriteImageLock(ref regname.Reference, registry ctlimg.Re
 			o.ui.BeginLinef("One or more images not found in bundle repo; skipping lock file update\n")
 			return nil
 		}
+		rewrittenImages[img.Image] = bundleRepoImgRef
 		newImgDescs = append(newImgDescs, lf.ImageDesc{
 			Image:       foundImg,
 			Annotations: img.Annotations,
@@ -210,7 +212,11 @@ func (o *PullOptions) rewriteImageLock(ref regname.Reference, registry ctlimg.Re
 	if err != nil {
 		return fmt.Errorf("Marshalling image lock file: %s", err)
 	}
-	o.ui.BeginLinef("All images found in bundle repo; updating lock file: %s\n", imageLockDir)
+	o.ui.BeginLinef("The bundle repo (%s) is hosting every image specified in the bundle's Image Lock File (.imgpkg/images.yml)\n", bundleRepo)
+	o.ui.BeginLinef("Updating the lock file: %s\n", imageLockDir)
+	for image, rewrittenImage := range rewrittenImages {
+		o.ui.BeginLinef("+++ image: %s was rewritten to %s\n", image, rewrittenImage)
+	}
 	return ioutil.WriteFile(imageLockDir, imgLockBytes, 600)
 }
 
