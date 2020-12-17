@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"archive/tar"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
@@ -47,7 +48,6 @@ func TestPullingAnImage(t *testing.T) {
 		configPath := fmt.Sprintf("/v2/%s/blobs/%s", expectedRepo, mustConfigName(t, img))
 		manifestPath := fmt.Sprintf("/v2/%s/manifests/latest", expectedRepo)
 		layerPath := fmt.Sprintf("/v2/%s/blobs/%s", expectedRepo, layerDigest)
-		manifestReqCount := 0
 
 		switch r.URL.Path {
 		case "/v2/":
@@ -55,7 +55,6 @@ func TestPullingAnImage(t *testing.T) {
 		case configPath:
 			w.Write(mustRawConfigFile(t, img))
 		case manifestPath:
-			manifestReqCount++
 			w.Write(mustRawManifest(t, img))
 		case layerPath:
 			compressed, err := layer.Compressed()
@@ -132,42 +131,15 @@ func TestPullingAnImage(t *testing.T) {
 }
 
 func TestPullingABundle(t *testing.T) {
-	layer, err := createImgPkgLayer()
-	if err != nil {
-		t.Fatalf("Unable to create an img pkg layer: %s", err)
-	}
+	// setup test
+	manifestFromTheBundleImageLockfile := "fake OCI manifest that is referenced by the bundle's imageLock file"
+	dir := createTestBundleOnDisk(manifestFromTheBundleImageLockfile, t)
+	defer Cleanup(dir)
 
-	img := createAnEmptyBundle(layer, t)
+	userAndRepoInFakeRegistry := "foo/bar"
+	bundleServedByFakeRegistry := createABundleFromDisk(dir, t)
 
-	expectedRepo := "foo/bar"
-	fakeRegistry := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		layerDigest := mustManifest(t, img).Layers[0].Digest
-		configPath := fmt.Sprintf("/v2/%s/blobs/%s", expectedRepo, mustConfigName(t, img))
-		manifestPath := fmt.Sprintf("/v2/%s/manifests/latest", expectedRepo)
-		layerPath := fmt.Sprintf("/v2/%s/blobs/%s", expectedRepo, layerDigest)
-		manifestReqCount := 0
-
-		switch r.URL.Path {
-		case "/v2/":
-			w.WriteHeader(http.StatusOK)
-		case configPath:
-			w.Write(mustRawConfigFile(t, img))
-		case manifestPath:
-			manifestReqCount++
-			w.Write(mustRawManifest(t, img))
-		case layerPath:
-			compressed, err := layer.Compressed()
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := io.Copy(w, compressed); err != nil {
-				t.Fatal(err)
-			}
-			w.WriteHeader(http.StatusOK)
-		default:
-			println(fmt.Sprintf("Unexpected path: %v", r.URL.Path))
-		}
-	}))
+	fakeRegistry := createFakeOCIRegistry(t, bundleServedByFakeRegistry, userAndRepoInFakeRegistry, manifestFromTheBundleImageLockfile)
 	defer fakeRegistry.Close()
 
 	uri, err := url.Parse(fakeRegistry.URL)
@@ -175,27 +147,20 @@ func TestPullingABundle(t *testing.T) {
 		t.Fatalf("Unable to get url from test registry %s", err)
 	}
 
-	tempPath := os.TempDir()
-	workingDir := filepath.Join(tempPath, "pull-bundle")
-	err = os.Mkdir(workingDir, 0700)
-	defer Cleanup(workingDir)
-
-	if err != nil {
-		t.Fatalf("Failed to create test directory: %s: %s", workingDir, err)
-	}
-
 	fakeUI := &fakes.FakeUI{}
 	pull := PullOptions{
 		ui:          fakeUI,
-		BundleFlags: BundleFlags{fmt.Sprintf("%s/%s", uri.Host, expectedRepo)},
-		OutputPath:  workingDir,
+		BundleFlags: BundleFlags{fmt.Sprintf("%s/%s", uri.Host, userAndRepoInFakeRegistry)},
+		OutputPath:  dir,
 	}
 
+	// test subject
 	err = pull.Run()
 	if err != nil {
 		t.Fatalf("Expected validations not to err, but did %s", err)
 	}
 
+	// assertions
 	expectedLines := strings.Join([]string{"Pulling image 'LOCAL_REGISTRY/foo/bar@sha256:REPLACED_SHA'\n", "Extracting layer 'sha256:REPLACED_SHA' (1/1)\n"}, "\n")
 	actualLines := replaceShaAndRegistryWithConstants(fakeUI, uri.Host)
 
@@ -233,8 +198,70 @@ func TestImageAndBundleAndLockError(t *testing.T) {
 	}
 }
 
-func createAnEmptyBundle(layer v1.Layer, t *testing.T) v1.Image {
-	var err error
+func createFakeOCIRegistry(t *testing.T, img v1.Image, expectedRepo string, manifestFromTheBundleImageLockfile string) *httptest.Server {
+	fakeRegistry := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		layerDigest := mustManifest(t, img).Layers[0].Digest
+		configPath := fmt.Sprintf("/v2/%s/blobs/%s", expectedRepo, mustConfigName(t, img))
+		manifestPath := fmt.Sprintf("/v2/%s/manifests/latest", expectedRepo)
+		layerPath := fmt.Sprintf("/v2/%s/blobs/%s", expectedRepo, layerDigest)
+
+		switch r.URL.Path {
+		case "/v2/":
+			w.WriteHeader(http.StatusOK)
+		case configPath:
+			w.Write(mustRawConfigFile(t, img))
+		case manifestPath:
+			w.Write(mustRawManifest(t, img))
+		case layerPath:
+			layers, err := img.Layers()
+			if err != nil {
+				t.Fatal(err)
+			}
+			compressed, err :=  layers[0].Compressed()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := io.Copy(w, compressed); err != nil {
+				t.Fatal(err)
+			}
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.Write([]byte(manifestFromTheBundleImageLockfile))
+		}
+	}))
+	return fakeRegistry
+}
+
+func createTestBundleOnDisk(manifestFromTheBundleImageLockfile string, t *testing.T) string {
+	sha256OfManifestFromTheBundleImageLockfile, _, err := v1.SHA256(bytes.NewReader([]byte(manifestFromTheBundleImageLockfile)))
+	if err != nil {
+		t.Fatalf("Unable to generate digest needed for images.yml: %s", err)
+	}
+
+	dir, err := ioutil.TempDir(os.TempDir(), "testingpullingabundle")
+	err = os.Mkdir(filepath.Join(dir, ".imgpkg"), os.ModePerm)
+	if err != nil {
+		t.Fatalf("Unable to create the .imgpkg directory: %s", err)
+	}
+
+	err = ioutil.WriteFile(filepath.Join(dir, ".imgpkg", "images.yml"), []byte(fmt.Sprintf(`apiVersion: ""
+kind: ""
+spec:
+  images:
+  - annotations: null
+    image: index.docker.io/fake/a@%s`, sha256OfManifestFromTheBundleImageLockfile)), os.ModePerm)
+	if err != nil {
+		t.Fatalf("Unable to create the images.yml file: %s", err)
+	}
+	return dir
+}
+
+func createABundleFromDisk(dir string, t *testing.T) v1.Image {
+	layer, err := createImgPkgLayer(dir)
+	if err != nil {
+		t.Fatalf("Unable to create an img pkg layer: %s", err)
+	}
+
 	img := empty.Image
 	img, err = mutate.Append(img, mutate.Addendum{
 		Layer: layer,
@@ -256,27 +283,19 @@ func createAnEmptyBundle(layer v1.Layer, t *testing.T) v1.Image {
 	return img
 }
 
-func createImgPkgLayer() (v1.Layer, error) {
-	// Hash the contents as we write it out to the buffer.
-	var b *bytes.Buffer
+func createImgPkgLayer(directoryToBundle string) (v1.Layer, error) {
 	hasher := sha256.New()
-
-	tarContents, err := ioutil.ReadFile("test.tar")
-	if err != nil {
-		return nil, err
-	}
-	b = bytes.NewBuffer(tarContents)
-	hasher.Write(tarContents)
-
+	var buf = &bytes.Buffer{}
+	compress(directoryToBundle, buf)
+	hasher.Write(buf.Bytes())
 	h := v1.Hash{
 		Algorithm: "sha256",
 		Hex:       hex.EncodeToString(hasher.Sum(make([]byte, 0, hasher.Size()))),
 	}
-
 	return partial.UncompressedToLayer(&uncompressedLayer{
 		diffID:    h,
 		mediaType: types.DockerLayer,
-		content:   b.Bytes(),
+		content:   buf.Bytes(),
 	})
 }
 
@@ -420,4 +439,44 @@ func (ul *uncompressedLayer) Uncompressed() (io.ReadCloser, error) {
 
 func (ul *uncompressedLayer) MediaType() (types.MediaType, error) {
 	return ul.mediaType, nil
+}
+
+func compress(src string, buf io.Writer) error {
+	tw := tar.NewWriter(buf)
+
+	// walk through every file in the folder
+	filepath.Walk(src, func(file string, fi os.FileInfo, err error) error {
+		header, err := tar.FileInfoHeader(fi, file)
+		if err != nil {
+			return err
+		}
+
+		rel, err := filepath.Rel(src, file)
+		if err != nil {
+			return err
+		}
+
+		header.Name = rel
+
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+		if !fi.IsDir() {
+			data, err := os.Open(file)
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(tw, data); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	// produce tar
+	if err := tw.Close(); err != nil {
+		return err
+	}
+
+	return nil
 }
