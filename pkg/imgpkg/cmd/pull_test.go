@@ -101,15 +101,15 @@ func TestPullingAnImage(t *testing.T) {
 
 func TestPullingABundleWhichRewritesTheLockfileProducesHelpfulOutput(t *testing.T) {
 	// setup test
-	manifestFromTheBundleImageLockfile := "fake OCI manifest that is referenced by the bundle's imageLock file"
 	imageUsedInTestBundle := "index.docker.io/fake/a"
+	manifestFromTheBundleImageLockfile := "fake OCI manifest that is referenced by the bundle's imageLock file"
 	dir := createTestBundleOnDisk(imageUsedInTestBundle, manifestFromTheBundleImageLockfile, t)
 	defer Cleanup(dir)
 
-	userAndRepoInFakeRegistry := "foo/bar"
+	bundleUserAndRepoInFakeRegistry := "foo/bar"
 	bundleServedByFakeRegistry := createABundleFromDisk(dir, t)
 
-	fakeRegistry := createFakeOCIRegistry(t, bundleServedByFakeRegistry, userAndRepoInFakeRegistry, manifestFromTheBundleImageLockfile)
+	fakeRegistry := createFakeOCIRegistry(t, bundleServedByFakeRegistry, bundleUserAndRepoInFakeRegistry, manifestFromTheBundleImageLockfile)
 	defer fakeRegistry.Close()
 
 	uri, err := url.Parse(fakeRegistry.URL)
@@ -120,7 +120,7 @@ func TestPullingABundleWhichRewritesTheLockfileProducesHelpfulOutput(t *testing.
 	fakeUI := &fakes.FakeUI{}
 	pull := PullOptions{
 		ui:          fakeUI,
-		BundleFlags: BundleFlags{fmt.Sprintf("%s/%s", uri.Host, userAndRepoInFakeRegistry)},
+		BundleFlags: BundleFlags{fmt.Sprintf("%s/%s", uri.Host, bundleUserAndRepoInFakeRegistry)},
 		OutputPath:  dir,
 	}
 
@@ -131,14 +131,14 @@ func TestPullingABundleWhichRewritesTheLockfileProducesHelpfulOutput(t *testing.
 	}
 
 	// assertions
-	lockfileRewriteLogMessageLine1 := fmt.Sprintf("The bundle repo (%s) is hosting every image specified in the bundle's Image Lock File (.imgpkg/images.yml)\n", filepath.Join("LOCAL_REGISTRY", userAndRepoInFakeRegistry))
-	lockfileRewriteLogMessageLine2 := fmt.Sprintf("Updating the lock file: %s\n", filepath.Join(dir, ".imgpkg/images.yml"))
-	lockfileRewriteLogMessageLine3 := fmt.Sprintf("+++ image: %s@sha256:REPLACED_SHA was rewritten to %s@sha256:REPLACED_SHA\n", imageUsedInTestBundle, filepath.Join("LOCAL_REGISTRY", userAndRepoInFakeRegistry))
+	lockfileRewriteLogMessageLine1 := fmt.Sprintf("The bundle repo (%s) is hosting every image specified in the bundle's Image Lock File (.imgpkg/images.yml)\n", filepath.Join("LOCAL_REGISTRY", bundleUserAndRepoInFakeRegistry))
+	lockfileRewriteLogMessageLine2 := fmt.Sprintf("\nUpdating the following images in the lock file: %s\n", filepath.Join(dir, ".imgpkg/images.yml"))
+	lockfileRewriteLogMessageLine3 := fmt.Sprintf("+++ image: %s@sha256:REPLACED_SHA was rewritten to %s@sha256:REPLACED_SHA\n", imageUsedInTestBundle, filepath.Join("LOCAL_REGISTRY", bundleUserAndRepoInFakeRegistry))
 
 	expectedLines := strings.Join([]string{
 		"Pulling image 'LOCAL_REGISTRY/foo/bar@sha256:REPLACED_SHA'\n",
 		"Extracting layer 'sha256:REPLACED_SHA' (1/1)\n",
-		"Locating image lock file images...\n",
+		"\nLocating image lock file images...\n",
 		lockfileRewriteLogMessageLine1,
 		lockfileRewriteLogMessageLine2,
 		lockfileRewriteLogMessageLine3,

@@ -176,7 +176,7 @@ func (o *PullOptions) rewriteImageLock(ref regname.Reference, registry ctlimg.Re
 	if len(lockFile.Spec.Images) == 0 {
 		return nil
 	}
-	o.ui.BeginLinef("Locating image lock file images...\n")
+	o.ui.BeginLinef("\nLocating image lock file images...\n")
 
 	bundleRepo := ref.Context().Name()
 	inBundleRepo := 0
@@ -213,7 +213,7 @@ func (o *PullOptions) rewriteImageLock(ref regname.Reference, registry ctlimg.Re
 		return fmt.Errorf("Marshalling image lock file: %s", err)
 	}
 	o.ui.BeginLinef("The bundle repo (%s) is hosting every image specified in the bundle's Image Lock File (.imgpkg/images.yml)\n", bundleRepo)
-	o.ui.BeginLinef("Updating the lock file: %s\n", imageLockDir)
+	o.ui.BeginLinef("\nUpdating the following images in the lock file: %s\n", imageLockDir)
 	for image, rewrittenImage := range rewrittenImages {
 		o.ui.BeginLinef("+++ image: %s was rewritten to %s\n", image, rewrittenImage)
 	}
