@@ -5,15 +5,16 @@ package cmd
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+
 	"github.com/cppforlife/go-cli-ui/ui"
 	regname "github.com/google/go-containerregistry/pkg/name"
 	ctlimg "github.com/k14s/imgpkg/pkg/imgpkg/image"
 	lf "github.com/k14s/imgpkg/pkg/imgpkg/lockfiles"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 )
 
 type PullOptions struct {
@@ -168,20 +169,19 @@ func (o *PullOptions) getRefFromFlags() (string, error) {
 }
 
 func (o *PullOptions) rewriteImageLock(ref regname.Reference, registry ctlimg.Registry) error {
-	imageLockDir := filepath.Join(o.OutputPath, lf.BundleDir, lf.ImageLockFile)
-	lockFile, err := lf.ReadImageLockFile(imageLockDir)
+	imageLockFilePath := filepath.Join(o.OutputPath, lf.BundleDir, lf.ImageLockFile)
+	lockFile, err := lf.ReadImageLockFile(imageLockFilePath)
 	if err != nil {
-		return fmt.Errorf("Reading image lock file: %s", err)
+		return fmt.Errorf("Reading %s file: %s", lf.ImagesLockKind, err)
 	}
 	if len(lockFile.Spec.Images) == 0 {
 		return nil
 	}
-	o.ui.BeginLinef("\nLocating image lock file images...\n")
+	o.ui.BeginLinef("\nLocating %s file images...\n", lf.ImagesLockKind)
 
 	bundleRepo := ref.Context().Name()
 	inBundleRepo := 0
 	var newImgDescs []lf.ImageDesc
-	rewrittenImages := map[string]string{}
 	for _, img := range lockFile.Spec.Images {
 		bundleRepoImgRef, err := ImageWithRepository(img.Image, bundleRepo)
 		if err != nil {
@@ -198,7 +198,6 @@ func (o *PullOptions) rewriteImageLock(ref regname.Reference, registry ctlimg.Re
 			o.ui.BeginLinef("One or more images not found in bundle repo; skipping lock file update\n")
 			return nil
 		}
-		rewrittenImages[img.Image] = bundleRepoImgRef
 		newImgDescs = append(newImgDescs, lf.ImageDesc{
 			Image:       foundImg,
 			Annotations: img.Annotations,
@@ -212,12 +211,11 @@ func (o *PullOptions) rewriteImageLock(ref regname.Reference, registry ctlimg.Re
 	if err != nil {
 		return fmt.Errorf("Marshalling image lock file: %s", err)
 	}
-	o.ui.BeginLinef("The bundle repo (%s) is hosting every image specified in the bundle's Image Lock File (.imgpkg/images.yml)\n", bundleRepo)
-	o.ui.BeginLinef("\nUpdating the following images in the lock file: %s\n", imageLockDir)
-	for image, rewrittenImage := range rewrittenImages {
-		o.ui.BeginLinef("+++ image: %s was rewritten to %s\n", image, rewrittenImage)
-	}
-	return ioutil.WriteFile(imageLockDir, imgLockBytes, 600)
+	o.ui.BeginLinef("The bundle repo (%s) is hosting every image specified in the bundle's %s file (.imgpkg/images.yml)\n", bundleRepo, lf.ImagesLockKind)
+	o.ui.BeginLinef("\nUpdating all images in the %s file: %s\n", lf.ImagesLockKind, imageLockFilePath)
+	o.ui.BeginLinef("+ Changing all image registry/repository references in %s to %s\n", imageLockFilePath, bundleRepo)
+
+	return ioutil.WriteFile(imageLockFilePath, imgLockBytes, 600)
 }
 
 func checkImageExists(urls []string, registry ctlimg.Registry) (string, error) {

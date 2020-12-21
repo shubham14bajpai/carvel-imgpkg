@@ -124,10 +124,10 @@ You have two options how to transfer bundle from one registry to another:
     Extracting layer 'sha256:233f1d0dbdc8cf675af965df8639b0dfd4ef7542dfc9fcfd03bfc45c570b0e4d' (1/1)
 
     Locating image lock file images... 
-    The bundle repo (registry.corp.com/apps/simple-app-bundle) is hosting every image specified in the bundle's Image Lock File (.imgpkg/images.yml)
+    The bundle repo (registry.corp.com/apps/simple-app-bundle) is hosting every image specified in the bundle's ImagesLock file (.imgpkg/images.yml)
 
-    Updating the following images in the lock file: /tmp/bundle/.imgpkg/images.yml
-    +++ image: index.docker.io/dkalinin/k8s-simple-app@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0 was rewritten to registry.corp.com/apps/simple-app-bundle@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+    Updating all images in the lock file: /tmp/bundle/.imgpkg/images.yml
+    + Changing all image registry/repository references in /tmp/bundle/.imgpkg/images.yml to registry.corp.com/apps
 
     Succeeded
     ```
