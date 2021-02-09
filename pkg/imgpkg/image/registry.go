@@ -51,6 +51,11 @@ type Registry struct {
 	imageLayerWriterChecker imagelayers.ImageLayerWriterFilter
 }
 
+func (i Registry) MultiWrite(write map[regname.Reference]regremote.Taggable) error {
+	numJobs := 100
+	return regremote.MultiWrite(write, append(i.opts, regremote.WithJobs(numJobs))...)
+}
+
 func NewRegistry(opts RegistryOpts, imageLayerWriterChecker imagelayers.ImageLayerWriterFilter) (Registry, error) {
 	httpTran, err := newHTTPTransport(opts)
 	if err != nil {
@@ -83,6 +88,19 @@ func (i Registry) Generic(ref regname.Reference) (regv1.Descriptor, error) {
 	}
 
 	return desc.Descriptor, nil
+}
+
+func (i Registry) Digest(ref regname.Reference) (regv1.Hash, error) {
+	overriddenRef, err := regname.ParseReference(ref.String(), i.refOpts...)
+	if err != nil {
+		return regv1.NewHash("error")
+	}
+	desc, err := regremote.Head(overriddenRef, i.opts...)
+	if err != nil {
+		return regv1.NewHash("error")
+	}
+
+	return desc.Digest, nil
 }
 
 func (i Registry) Image(ref regname.Reference) (regv1.Image, error) {

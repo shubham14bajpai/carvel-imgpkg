@@ -1,6 +1,64 @@
 apiVersion: imgpkg.carvel.dev/v1alpha1
 kind: ImagesLock
 images:
-- image: index.docker.io/dkalinin/k8s-simple-app@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+- image: index.docker.io/k8slt/k8s-simple-app-1@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
   annotations:
     kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-2@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-3@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-4@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-5@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-6@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-7@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-8@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-9@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-10@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-11@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-12@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-13@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-14@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-15@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-16@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-17@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-18@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-19@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+- image: index.docker.io/k8slt/k8s-simple-app-20@sha256:4c8b96d4fffdfae29258d94a22ae4ad1fe36139d47288b8960d9958d1e63a9d0
+  annotations:
+    kbld.carvel.dev/id: docker.io/dkalinin/k8s-simple-app
+

@@ -20,15 +20,17 @@ type ImagesReaderWriter interface {
 	WriteImage(regname.Reference, regv1.Image) error
 	WriteIndex(regname.Reference, regv1.ImageIndex) error
 	WriteTag(regname.Tag, regremote.Taggable) error
+	MultiWrite(write map[regname.Reference]regremote.Taggable) error
 }
 
 type ImageSet struct {
-	concurrency int
-	logger      *ctlimg.LoggerPrefixWriter
+	multipleImagesWeAregonnaWrite map[regname.Reference]regremote.Taggable
+	concurrency                   int
+	logger                        *ctlimg.LoggerPrefixWriter
 }
 
 func NewImageSet(concurrency int, logger *ctlimg.LoggerPrefixWriter) ImageSet {
-	return ImageSet{concurrency, logger}
+	return ImageSet{map[regname.Reference]regremote.Taggable{}, concurrency, logger}
 }
 
 func (o ImageSet) Relocate(foundImages *UnprocessedImageRefs,
@@ -83,6 +85,20 @@ func (o *ImageSet) Import(imgOrIndexes []imagedesc.ImageOrIndex,
 	for _, item := range imgOrIndexes {
 		item := item // copy
 
+		err := o.updateMapOfImagesToWrite(item, importRepo)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err := registry.MultiWrite(o.multipleImagesWeAregonnaWrite)
+	if err != nil {
+		return nil, fmt.Errorf("multiwrite error %s", err)
+	}
+
+	for _, item := range imgOrIndexes {
+		item := item // copy
+
 		go func() {
 			importThrottle.Take()
 			defer importThrottle.Done()
@@ -93,7 +109,7 @@ func (o *ImageSet) Import(imgOrIndexes []imagedesc.ImageOrIndex,
 				return
 			}
 
-			importDigestRef, err := o.importImage(item, existingRef, importRepo, registry)
+			importDigestRef, err := o.verifyImagesThatWereUploaded(item, existingRef, importRepo, registry)
 			if err != nil {
 				errCh <- fmt.Errorf("Importing image %s: %s", existingRef.Name(), err)
 				return
@@ -127,7 +143,35 @@ func (o *ImageSet) Import(imgOrIndexes []imagedesc.ImageOrIndex,
 	return importedImages, nil
 }
 
-func (o *ImageSet) importImage(item imagedesc.ImageOrIndex,
+// ~1 second to write image. can we use google-container-registry.Multiwrite?
+func (o *ImageSet) updateMapOfImagesToWrite(item imagedesc.ImageOrIndex, importRepo regname.Repository) error {
+	itemDigest, err := item.Digest()
+	if err != nil {
+		return err
+	}
+
+	tag := fmt.Sprintf("imgpkg-%s-%s", itemDigest.Algorithm, itemDigest.Hex)
+
+	// Seems like AWS ECR doesnt like using digests for manifest uploads
+	uploadTagRef, err := regname.NewTag(fmt.Sprintf("%s:%s", importRepo.Name(), tag))
+	if err != nil {
+		return fmt.Errorf("Building upload tag image ref: %s", err)
+	}
+
+	switch {
+	case item.Image != nil:
+		o.multipleImagesWeAregonnaWrite[uploadTagRef] = *item.Image
+	case item.Index != nil:
+		o.multipleImagesWeAregonnaWrite[uploadTagRef] = *item.Index
+	default:
+		panic("Unknown item")
+	}
+
+	return nil
+}
+
+// ~1 second to write image. can we use google-container-registry.Multiwrite?
+func (o *ImageSet) verifyImagesThatWereUploaded(item imagedesc.ImageOrIndex,
 	existingRef regname.Reference, importRepo regname.Repository,
 	registry ImagesReaderWriter) (regname.Digest, error) {
 
@@ -150,23 +194,6 @@ func (o *ImageSet) importImage(item imagedesc.ImageOrIndex,
 	}
 
 	o.logger.Write([]byte(fmt.Sprintf("importing %s -> %s...\n", existingRef.Name(), importDigestRef.Name())))
-
-	switch {
-	case item.Image != nil:
-		err = registry.WriteImage(uploadTagRef, *item.Image)
-		if err != nil {
-			return regname.Digest{}, fmt.Errorf("Importing image as %s: %s", importDigestRef.Name(), err)
-		}
-
-	case item.Index != nil:
-		err = registry.WriteIndex(uploadTagRef, *item.Index)
-		if err != nil {
-			return regname.Digest{}, fmt.Errorf("Importing image index as %s: %s", importDigestRef.Name(), err)
-		}
-
-	default:
-		panic("Unknown item")
-	}
 
 	// Verify that imported image still has the same digest as we expect.
 	// Being a little bit paranoid here because tag ref is used for import
@@ -204,6 +231,7 @@ func (o *ImageSet) importImage(item imagedesc.ImageOrIndex,
 	return importDigestRef, nil
 }
 
+// ~2.5 seconds
 func (o *ImageSet) verifyTagDigest(
 	uploadTagRef regname.Reference, importDigestRef regname.Digest, registry ImagesReaderWriter) error {
 
