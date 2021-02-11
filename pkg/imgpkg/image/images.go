@@ -9,6 +9,7 @@ import (
 
 	regname "github.com/google/go-containerregistry/pkg/name"
 	regv1 "github.com/google/go-containerregistry/pkg/v1"
+	regremote "github.com/google/go-containerregistry/pkg/v1/remote"
 	regtran "github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	regtypes "github.com/google/go-containerregistry/pkg/v1/types"
 )
@@ -19,6 +20,7 @@ type ImagesMetadata interface {
 	Digest(regname.Reference) (regv1.Hash, error)
 	Index(regname.Reference) (regv1.ImageIndex, error)
 	Image(regname.Reference) (regv1.Image, error)
+	Get(regname.Reference) (*regremote.Descriptor, error)
 }
 
 type Images struct {
@@ -118,6 +120,11 @@ func (m errImagesMetadata) Digest(reference regname.Reference) (regv1.Hash, erro
 
 func (m errImagesMetadata) Generic(ref regname.Reference) (regv1.Descriptor, error) {
 	desc, err := m.delegate.Generic(ref)
+	return desc, m.betterErr(ref, err)
+}
+
+func (m errImagesMetadata) Get(ref regname.Reference) (*regremote.Descriptor, error) {
+	desc, err := m.delegate.Get(ref)
 	return desc, m.betterErr(ref, err)
 }
 

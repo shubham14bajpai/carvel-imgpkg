@@ -4,7 +4,6 @@
 package main
 
 import (
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/cppforlife/go-cli-ui/ui"
+	"github.com/google/go-containerregistry/pkg/logs"
 	"github.com/k14s/imgpkg/pkg/imgpkg/cmd"
 )
 
@@ -42,10 +42,10 @@ func main() {
 
 	rand.Seed(time.Now().UTC().UnixNano())
 
-	log.SetOutput(ioutil.Discard)
+	log.SetOutput(os.Stderr)
 
-	// TODO logs
-	// TODO log flags used
+	logs.Warn.SetOutput(os.Stderr)
+	logs.Progress.SetOutput(os.Stderr)
 
 	confUI := ui.NewConfUI(ui.NewNoopLogger())
 	defer confUI.Flush()

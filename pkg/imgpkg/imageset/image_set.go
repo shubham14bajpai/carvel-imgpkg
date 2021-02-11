@@ -20,7 +20,7 @@ type ImagesReaderWriter interface {
 	WriteImage(regname.Reference, regv1.Image) error
 	WriteIndex(regname.Reference, regv1.ImageIndex) error
 	WriteTag(regname.Tag, regremote.Taggable) error
-	MultiWrite(write map[regname.Reference]regremote.Taggable) error
+	MultiWrite(write map[regname.Reference]regremote.Taggable, concurrency int) error
 }
 
 type ImageSet struct {
@@ -85,13 +85,13 @@ func (o *ImageSet) Import(imgOrIndexes []imagedesc.ImageOrIndex,
 	for _, item := range imgOrIndexes {
 		item := item // copy
 
-		err := o.updateMapOfImagesToWrite(item, importRepo)
+		err := o.updateMapOfImagesToWrite(item, importRepo, registry)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	err := registry.MultiWrite(o.multipleImagesWeAregonnaWrite)
+	err := registry.MultiWrite(o.multipleImagesWeAregonnaWrite, o.concurrency)
 	if err != nil {
 		return nil, fmt.Errorf("multiwrite error %s", err)
 	}
@@ -144,7 +144,7 @@ func (o *ImageSet) Import(imgOrIndexes []imagedesc.ImageOrIndex,
 }
 
 // ~1 second to write image. can we use google-container-registry.Multiwrite?
-func (o *ImageSet) updateMapOfImagesToWrite(item imagedesc.ImageOrIndex, importRepo regname.Repository) error {
+func (o *ImageSet) updateMapOfImagesToWrite(item imagedesc.ImageOrIndex, importRepo regname.Repository, registry ImagesReaderWriter) error {
 	itemDigest, err := item.Digest()
 	if err != nil {
 		return err
@@ -160,7 +160,19 @@ func (o *ImageSet) updateMapOfImagesToWrite(item imagedesc.ImageOrIndex, importR
 
 	switch {
 	case item.Image != nil:
-		o.multipleImagesWeAregonnaWrite[uploadTagRef] = *item.Image
+		reference, err := regname.ParseReference(item.Ref())
+		if err != nil {
+			return err
+		}
+		descriptor, err := registry.Get(reference)
+		if err != nil {
+			return err
+		}
+		mountableImage, err := descriptor.Image()
+		if err != nil {
+			return err
+		}
+		o.multipleImagesWeAregonnaWrite[uploadTagRef] = mountableImage
 	case item.Index != nil:
 		o.multipleImagesWeAregonnaWrite[uploadTagRef] = *item.Index
 	default:
