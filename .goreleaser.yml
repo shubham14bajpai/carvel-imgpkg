@@ -81,4 +81,3 @@ changelog:
     exclude:
       - '^docs:'
       - typo
-      - (?i)foo

@@ -3,6 +3,8 @@ name: goreleaser
 on:
   pull_request:
   push:
+    tags:
+      - 'v*'
 
 jobs:
   goreleaser:
@@ -23,7 +25,30 @@ jobs:
         uses: goreleaser/goreleaser-action@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          version: ${{ github.event.release.tag_name }}
+          version: ${{ github.event.release.tag_name }} #TODO: this should be the version of goreleaser
           args: release --rm-dist
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      -
+        name: verify uploaded artifacts
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+        run: |
+          set -e -x
+
+          VERSION=`echo ${{ github.ref }}  | grep -o 'v.*'`
+          echo "$GITHUB_CONTEXT"
+          curl -o ./imgpkg-linux-amd64 -s -L https://github.com/DennisDenuto/carvel-imgpkg/releases/download/${VERSION}/imgpkg-linux-amd64
+          curl -o ./imgpkg-windows-amd64.exe -s -L https://github.com/DennisDenuto/carvel-imgpkg/releases/download/${VERSION}/imgpkg-windows-amd64.exe
+          curl -o ./imgpkg-darwin-amd64 -s -L https://github.com/DennisDenuto/carvel-imgpkg/releases/download/${VERSION}/imgpkg-darwin-amd64
+
+          curl -o ./checksums -s -L https://github.com/DennisDenuto/carvel-imgpkg/releases/download/${VERSION}/checksums.txt
+          diff ./checksums <(shasum -a 256 imgpkg-linux-amd64 imgpkg-windows-amd64.exe imgpkg-darwin-amd64)
+
+          export GOPATH=$(echo `pwd`)
+          cd src/github.com/${{ github.repository }}
+
+          # deploy local registry and run tests
+          ./hack/build-binaries.sh > ./go-checksums
+          diff ./checksums ./go-checksums
