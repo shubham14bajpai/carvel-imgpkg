@@ -18,9 +18,10 @@ builds:
     # not sure if the ldflags buildid is needed anymore. check https://github.com/golang/go/issues/16860
     flags:
       - -trimpath
+
     ldflags:
-      - -X "github.com/k14s/imgpkg/pkg/imgpkg/cmd.Version={{ .Version }}"
       - -buildid=
+      - -X github.com/k14s/imgpkg/pkg/imgpkg/cmd.Version={{ .Version }}
 
     # is mod_timestamp needed?
     # mod_timestamp: '{{ .CommitTimestamp }}'
