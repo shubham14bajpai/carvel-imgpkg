@@ -10,9 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	Version = "0.6.0"
-)
+var Version = ""
 
 type VersionOptions struct {
 	ui ui.UI
