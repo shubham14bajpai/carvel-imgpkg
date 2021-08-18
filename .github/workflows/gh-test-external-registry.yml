@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - develop
+      - test-with-gcr-registry-test-deleteme
   pull_request_target:
     types: [opened, reopened, synchronize]
 permissions:
