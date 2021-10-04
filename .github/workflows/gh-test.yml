@@ -44,23 +44,22 @@ jobs:
         path: src/github.com/${{ github.repository }}
     - name: Run Tests
       run: |
-        SET pwd=%cd%
-        [System.Environment]::SetEnvironmentVariable("GOPATH", "%pwd%", "Machine")
+        bash -c '
+        set -e -x
 
-        $goroot = [System.Environment]::GetEnvironmentVariable("GOROOT")
-        $gopath = [System.Environment]::GetEnvironmentVariable("GOPATH")
-        $p = [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
-        $p = "$goroot\bin;$gopath\bin;$p"
-        [System.Environment]::SetEnvironmentVariable("PATH", "$p", "Machine")
-
+        export GOPATH=$(echo `pwd`)
+        export PATH="$GOPATH/bin:$PATH"
         cd src/github.com/${{ github.repository }}
 
-        [System.Environment]::SetEnvironmentVariable("IMGPKG_E2E_IMAGE", "ttl.sh/github-action-test-relocation-$GITHUB_RUN_ID")
-        [System.Environment]::SetEnvironmentVariable("IMGPKG_E2E_RELOCATION_REPO", "ttl.sh/github-action-imgpkg-test-$GITHUB_RUN_ID")
+        export IMGPKG_E2E_IMAGE="ttl.sh/github-action-test-relocation-$GITHUB_RUN_ID"
+        export IMGPKG_E2E_RELOCATION_REPO="ttl.sh/github-action-imgpkg-test-$GITHUB_RUN_ID"
         # deploy local registry and run tests
 
-
         go install github.com/sigstore/cosign/cmd/cosign@v0.5.0
-        bash -c 'ls -l $GOPATH/bin/*'
+        ls -l $GOPATH/bin/*
 
-        bash ./hack/test-all.sh
+        alias cosign=cosign.exe
+        export IMGPKG_BINARY="$GOPATH/src/github.com/${{ github.repository }}/imgpkg"
+        $IMGPKG_BINARY version
+        ./hack/test-all.sh
+        '

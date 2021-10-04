@@ -20,6 +20,8 @@ git apply --ignore-space-change --ignore-whitespace ./hack/patch-k8s-pkg-credent
 go build -ldflags="$LDFLAGS" -trimpath -o imgpkg ./cmd/imgpkg/...
 ./imgpkg version
 
+pwd
+
 # compile tests, but do not run them: https://github.com/golang/go/issues/15513#issuecomment-839126426
 go test --exec=echo ./...
 
