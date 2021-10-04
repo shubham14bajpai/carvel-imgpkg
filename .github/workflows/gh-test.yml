@@ -29,3 +29,30 @@ jobs:
 
         # deploy local registry and run tests
         ./hack/test-all-local-registry.sh
+
+  test-all-windows:
+    name: Test GH
+    runs-on: windows-latest
+    steps:
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v1
+      with:
+        go-version: "1.17"
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+      with:
+        path: src/github.com/${{ github.repository }}
+    - name: Run Tests
+      run: |
+        SET pwd=%cd%
+        [System.Environment]::SetEnvironmentVariable("GOPATH", "%pwd%", "Machine")
+
+        $goroot = [System.Environment]::GetEnvironmentVariable("GOROOT")
+        $p = [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
+        $p = "$goroot\bin;$p"
+        [System.Environment]::SetEnvironmentVariable("PATH", "$p", "Machine")
+
+        cd src/github.com/${{ github.repository }}
+
+        # deploy local registry and run tests
+        bash ./hack/test-all-local-registry.sh
