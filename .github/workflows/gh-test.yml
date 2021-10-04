@@ -8,7 +8,7 @@ on:
     types: [opened, reopened, synchronize]
 jobs:
   test-all:
-    name: Test GH
+    name: Test GH - Linux
     runs-on: ubuntu-latest
     steps:
     - name: Set up Go 1.x
@@ -31,7 +31,7 @@ jobs:
         ./hack/test-all-local-registry.sh
 
   test-all-windows:
-    name: Test GH
+    name: Test GH - Windows
     runs-on: windows-latest
     steps:
     - name: Set up Go 1.x
@@ -54,5 +54,7 @@ jobs:
 
         cd src/github.com/${{ github.repository }}
 
+        [System.Environment]::SetEnvironmentVariable("IMGPKG_E2E_IMAGE", "ttl.sh/github-action-test-relocation-$GITHUB_RUN_ID")
+        [System.Environment]::SetEnvironmentVariable("IMGPKG_E2E_RELOCATION_REPO", "ttl.sh/github-action-imgpkg-test-$GITHUB_RUN_ID")
         # deploy local registry and run tests
-        bash ./hack/test-all-local-registry.sh
+        bash ./hack/test-all.sh
