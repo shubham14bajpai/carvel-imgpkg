@@ -48,8 +48,9 @@ jobs:
         [System.Environment]::SetEnvironmentVariable("GOPATH", "%pwd%", "Machine")
 
         $goroot = [System.Environment]::GetEnvironmentVariable("GOROOT")
+        $gopath = [System.Environment]::GetEnvironmentVariable("GOPATH")
         $p = [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
-        $p = "$goroot\bin;$p"
+        $p = "$goroot\bin;$gopath\bin;$p"
         [System.Environment]::SetEnvironmentVariable("PATH", "$p", "Machine")
 
         cd src/github.com/${{ github.repository }}
