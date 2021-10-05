@@ -60,6 +60,5 @@ jobs:
 
         alias cosign=cosign.exe
         export IMGPKG_BINARY="$GOPATH/src/github.com/${{ github.repository }}/imgpkg"
-        $IMGPKG_BINARY version
         ./hack/test-all.sh
         '

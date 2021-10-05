@@ -3,8 +3,8 @@
 set -e -x -u
 
 ./hack/build.sh
-
-export IMGPKG_BINARY="$PWD/imgpkg"
+cp $IMGPKG_BINARY "$IMGPKG_BINARY.exe"
+export IMGPKG_BINARY="$PWD/imgpkg.exe"
 
 ./hack/test.sh
 ./hack/test-e2e.sh
