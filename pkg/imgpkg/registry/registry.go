@@ -274,6 +274,11 @@ func newHTTPTransport(opts Opts) (*http.Transport, error) {
 	clonedDefaultTransport.TLSClientConfig = &tls.Config{
 		RootCAs:            pool,
 		InsecureSkipVerify: opts.VerifyCerts == false,
+
+		VerifyConnection: func(state tls.ConnectionState) error {
+			println("verify connection was called")
+			return nil
+		},
 	}
 
 	return clonedDefaultTransport, nil
