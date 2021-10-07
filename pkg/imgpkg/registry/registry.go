@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"runtime"
 	"time"
 
 	regname "github.com/google/go-containerregistry/pkg/name"
@@ -250,8 +251,17 @@ func (r Registry) FirstImageExists(digests []string) (string, error) {
 }
 
 func newHTTPTransport(opts Opts) (*http.Transport, error) {
-	pool, err := x509.SystemCertPool()
-	if err != nil {
+	var pool *x509.CertPool
+
+	if runtime.GOOS != "windows" {
+		var err error
+		pool, err = x509.SystemCertPool()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if runtime.GOOS == "windows" && len(opts.CACertPaths) > 0 {
 		pool = x509.NewCertPool()
 	}
 
