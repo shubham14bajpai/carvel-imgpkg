@@ -5,8 +5,13 @@ package cmd
 
 import (
 	"fmt"
+	"io"
+	"log"
+	"net/http/httptest"
+	"time"
 
 	"github.com/cppforlife/go-cli-ui/ui"
+	regregistry "github.com/google/go-containerregistry/pkg/registry"
 	"github.com/spf13/cobra"
 )
 
@@ -31,6 +36,11 @@ func NewVersionCmd(o *VersionOptions) *cobra.Command {
 
 func (o *VersionOptions) Run() error {
 	o.ui.PrintBlock([]byte(fmt.Sprintf("imgpkg version %s\n", Version)))
+
+	server := httptest.NewTLSServer(regregistry.New(regregistry.Logger(log.New(io.Discard, "", 0))))
+
+	println(server.URL)
+	time.Sleep(30 * time.Minute)
 
 	return nil
 }
