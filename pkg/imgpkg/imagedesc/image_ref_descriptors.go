@@ -88,12 +88,17 @@ func NewImageRefDescriptors(refs []Metadata, registry Registry) (*ImageRefDescri
 
 				td = ImageOrImageIndexDescriptor{ImageIndex: &imgIndexTd}
 			} else {
-				img, err := imageRefDescs.buildImage(ref)
+				img, err := imageRefDescs.registry.Image(ref.Ref)
 				if err != nil {
 					return err
 				}
 
-				td = ImageOrImageIndexDescriptor{Image: &img}
+				imgDescriptor, err := imageRefDescs.buildImage(ref, img)
+				if err != nil {
+					return err
+				}
+
+				td = ImageOrImageIndexDescriptor{Image: &imgDescriptor}
 			}
 
 			imageRefDescsLock.Lock()
@@ -105,6 +110,28 @@ func NewImageRefDescriptors(refs []Metadata, registry Registry) (*ImageRefDescri
 	}
 
 	err := wg.Wait()
+
+	return imageRefDescs, err
+}
+
+func NewImageRefDescriptorsFromImage(imageMetadata Metadata, image regv1.Image) (*ImageRefDescriptors, error) {
+	var registry Registry = nil
+
+	imageRefDescs := &ImageRefDescriptors{
+		registry:    registry,
+		imageLayers: map[ImageLayerDescriptor]regv1.Layer{},
+	}
+
+	var td ImageOrImageIndexDescriptor
+
+	img, err := imageRefDescs.buildImage(imageMetadata, image)
+	if err != nil {
+		return nil, err
+	}
+
+	td = ImageOrImageIndexDescriptor{Image: &img}
+
+	imageRefDescs.descs = append(imageRefDescs.descs, td)
 
 	return imageRefDescs, err
 }
@@ -147,7 +174,12 @@ func (ids *ImageRefDescriptors) buildImageIndex(ref Metadata, regDesc regv1.Desc
 			}
 			td.Indexes = append(td.Indexes, imgIndexTd)
 		} else {
-			imgTd, err := ids.buildImage(Metadata{ids.buildRef(ref.Ref, manDesc.Digest.String()), ref.Tag, ref.Labels})
+			img, err := ids.registry.Image(ref.Ref)
+			if err != nil {
+				return ImageIndexDescriptor{}, err
+			}
+
+			imgTd, err := ids.buildImage(Metadata{ids.buildRef(ref.Ref, manDesc.Digest.String()), ref.Tag, ref.Labels}, img)
 			if err != nil {
 				return ImageIndexDescriptor{}, err
 			}
@@ -158,13 +190,8 @@ func (ids *ImageRefDescriptors) buildImageIndex(ref Metadata, regDesc regv1.Desc
 	return td, nil
 }
 
-func (ids *ImageRefDescriptors) buildImage(ref Metadata) (ImageDescriptor, error) {
+func (ids *ImageRefDescriptors) buildImage(ref Metadata, img regv1.Image) (ImageDescriptor, error) {
 	td := ImageDescriptor{}
-
-	img, err := ids.registry.Image(ref.Ref)
-	if err != nil {
-		return td, err
-	}
 
 	cfgDigest, err := img.ConfigName()
 	if err != nil {
