@@ -168,12 +168,13 @@ func (ids *ImageRefDescriptors) buildImageIndex(ref Metadata, regDesc regv1.Desc
 			}
 			td.Indexes = append(td.Indexes, imgIndexTd)
 		} else {
-			img, err := ids.registry.Image(ref.Ref)
+			metadata := Metadata{ids.buildRef(ref.Ref, manDesc.Digest.String()), ref.Tag, ref.Labels}
+			img, err := ids.registry.Image(metadata.Ref)
 			if err != nil {
 				return ImageIndexDescriptor{}, err
 			}
 
-			imgTd, err := ids.buildImage(Metadata{ids.buildRef(ref.Ref, manDesc.Digest.String()), ref.Tag, ref.Labels}, img)
+			imgTd, err := ids.buildImage(metadata, img)
 			if err != nil {
 				return ImageIndexDescriptor{}, err
 			}
