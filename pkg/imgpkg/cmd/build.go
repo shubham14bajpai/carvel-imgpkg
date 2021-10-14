@@ -9,8 +9,6 @@ import (
 
 	"github.com/cppforlife/go-cli-ui/ui"
 	regname "github.com/google/go-containerregistry/pkg/name"
-	regv1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/k14s/imgpkg/pkg/imgpkg/bundle"
 	ctlimg "github.com/k14s/imgpkg/pkg/imgpkg/image"
 	ctlimgset "github.com/k14s/imgpkg/pkg/imgpkg/imageset"
@@ -123,25 +121,23 @@ func (po *BuildOptions) buildBundle(registry registry.Registry) (string, error) 
 		unprocessedImageRefs.Add(ctlimgset.UnprocessedImageRef{DigestRef: img.PrimaryLocation()})
 	}
 
-	unprocessedImageRefs.Add(ctlimgset.UnprocessedImageRef{
-		DigestRef: rootBundle.DigestRef(),
-		Tag:       rootBundle.Tag(),
-		Labels: map[string]string{
-			rootBundleLabelKey: "",
-		}},
-	)
-
+	processedImages := ctlimgset.NewProcessedImages()
 	fetch, err := plainImage.Fetch()
 	if err != nil {
 		return "", err
 	}
 
-	localBundleReference, err := regname.ParseReference(builtBundleDigest)
-	if err != nil {
-		return "", err
-	}
-
-	registryWithLocalImage := RegistryWithLocalImage{registry, fetch, localBundleReference}
+	processedImages.Add(ctlimgset.ProcessedImage{
+		UnprocessedImageRef: ctlimgset.UnprocessedImageRef{
+			DigestRef: rootBundle.DigestRef(),
+			Tag:       rootBundle.Tag(),
+			Labels: map[string]string{
+				rootBundleLabelKey: "",
+			}},
+		DigestRef:  rootBundle.DigestRef(),
+		Image:      fetch,
+		ImageIndex: nil,
+	})
 
 	// TODO: thread in via flags
 	path := "/tmp/testbundle.tar"
@@ -149,8 +145,7 @@ func (po *BuildOptions) buildBundle(registry registry.Registry) (string, error) 
 	imageSet := ctlimgset.NewImageSet(concurrency, prefixedLogger)
 	tarImageSet := ctlimgset.NewTarImageSet(imageSet, concurrency, prefixedLogger)
 
-	_, err = tarImageSet.Export(unprocessedImageRefs, path, registryWithLocalImage,
-		imagetar.NewImageLayerWriterCheck(false))
+	_, err = tarImageSet.Export(unprocessedImageRefs, processedImages, path, registry, imagetar.NewImageLayerWriterCheck(false))
 	if err != nil {
 		return "", err
 	}
@@ -193,17 +188,6 @@ func (po *BuildOptions) buildImage(registry registry.Registry) (string, error) {
 	}
 
 	plainImage := plainimage.NewFetchedPlainImageWithTag(builtImageDigest, tag, imageBuild.Image)
-	plainImageLocalBuild, err := plainImage.Fetch()
-	if err != nil {
-		return "", err
-	}
-
-	localImageRef, err := regname.ParseReference(builtImageDigest)
-	if err != nil {
-		return "", err
-	}
-
-	registryWithLocalImage := RegistryWithLocalImage{registry, plainImageLocalBuild, localImageRef}
 
 	// TODO: thread in via flags
 	path := "/tmp/testbundle.tar"
@@ -213,15 +197,23 @@ func (po *BuildOptions) buildImage(registry registry.Registry) (string, error) {
 	imageSet := ctlimgset.NewImageSet(concurrency, prefixedLogger)
 	tarImageSet := ctlimgset.NewTarImageSet(imageSet, concurrency, prefixedLogger)
 
-	unprocessedImageRefs := ctlimgset.NewUnprocessedImageRefs()
-	unprocessedImageRefs.Add(ctlimgset.UnprocessedImageRef{
-		DigestRef: plainImage.DigestRef(),
-		Tag:       plainImage.Tag(),
-	},
-	)
+	processedImages := ctlimgset.NewProcessedImages()
+	fetch, err := plainImage.Fetch()
+	if err != nil {
+		return "", err
+	}
 
-	_, err = tarImageSet.Export(unprocessedImageRefs, path, registryWithLocalImage,
-		imagetar.NewImageLayerWriterCheck(false))
+	processedImages.Add(ctlimgset.ProcessedImage{
+		UnprocessedImageRef: ctlimgset.UnprocessedImageRef{
+			DigestRef: plainImage.DigestRef(),
+			Tag:       plainImage.Tag(),
+		},
+		DigestRef:  plainImage.DigestRef(),
+		Image:      fetch,
+		ImageIndex: nil,
+	})
+
+	_, err = tarImageSet.Export(ctlimgset.NewUnprocessedImageRefs(), processedImages, path, registry, imagetar.NewImageLayerWriterCheck(false))
 	if err != nil {
 		return "", err
 	}
@@ -254,40 +246,4 @@ func (po *BuildOptions) getTag(imageRef string) (string, error) {
 		return "", fmt.Errorf("Parsing '%s': %s", imageRef, err)
 	}
 	return uploadRef.TagStr(), nil
-}
-
-type RegistryWithLocalImage struct {
-	ctlimgset.ImagesReaderWriter
-
-	localImage regv1.Image
-	reference  regname.Reference
-}
-
-func (r RegistryWithLocalImage) Get(reference regname.Reference) (*remote.Descriptor, error) {
-	if reference.Identifier() == r.reference.Identifier() {
-		manifest, err := r.localImage.RawManifest()
-		if err != nil {
-			return nil, err
-		}
-		return &remote.Descriptor{
-			Manifest: manifest,
-		}, nil
-	}
-	return r.ImagesReaderWriter.Get(reference)
-}
-
-func (r RegistryWithLocalImage) Digest(reference regname.Reference) (regv1.Hash, error) {
-	if reference.Identifier() == r.reference.Identifier() {
-		return r.localImage.Digest()
-	}
-
-	return r.ImagesReaderWriter.Digest(reference)
-}
-
-func (r RegistryWithLocalImage) Image(reference regname.Reference) (regv1.Image, error) {
-	if reference.Identifier() == r.reference.Identifier() {
-		return r.localImage, nil
-	}
-
-	return r.ImagesReaderWriter.Image(reference)
 }

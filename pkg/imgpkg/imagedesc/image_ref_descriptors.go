@@ -114,26 +114,20 @@ func NewImageRefDescriptors(refs []Metadata, registry Registry) (*ImageRefDescri
 	return imageRefDescs, err
 }
 
-func NewImageRefDescriptorsFromImage(imageMetadata Metadata, image regv1.Image) (*ImageRefDescriptors, error) {
-	var registry Registry = nil
-
-	imageRefDescs := &ImageRefDescriptors{
-		registry:    registry,
-		imageLayers: map[ImageLayerDescriptor]regv1.Layer{},
-	}
-
+func (ids *ImageRefDescriptors) AddImage(imageMetadata Metadata, image regv1.Image) error {
 	var td ImageOrImageIndexDescriptor
 
-	img, err := imageRefDescs.buildImage(imageMetadata, image)
+	img, err := ids.buildImage(imageMetadata, image)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	td = ImageOrImageIndexDescriptor{Image: &img}
 
-	imageRefDescs.descs = append(imageRefDescs.descs, td)
+	//TODO: Add mutext
+	ids.descs = append(ids.descs, td)
 
-	return imageRefDescs, err
+	return err
 }
 
 func (ids *ImageRefDescriptors) Descriptors() []ImageOrImageIndexDescriptor {
