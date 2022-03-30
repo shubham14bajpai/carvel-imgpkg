@@ -179,12 +179,16 @@ func (i *DirImage) extractTarEntry(header *tar.Header, input io.Reader) error {
 }
 
 func lchmod(header *tar.Header, path string, mode os.FileMode) error {
+	// copy user permissions to group and other
+	userPermission := int64(mode & 0700)
+	permMode := os.FileMode(userPermission | userPermission>>3 | userPermission>>6)
+
 	if header.Typeflag == tar.TypeLink {
 		if fi, err := os.Lstat(header.Linkname); err == nil && (fi.Mode()&os.ModeSymlink == 0) {
-			return os.Chmod(path, mode)
+			return os.Chmod(path, permMode)
 		}
 	} else if header.Typeflag != tar.TypeSymlink {
-		return os.Chmod(path, mode)
+		return os.Chmod(path, permMode)
 	}
 	return nil
 }

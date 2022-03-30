@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -223,4 +224,80 @@ func TestPullImageIndexShouldError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Contains(t, out.String(), "Unable to pull non-images, such as image indexes. (hint: provide a specific digest to the image instead)")
+}
+
+func TestPull(t *testing.T) {
+	logger := &helpers.Logger{}
+
+	env := helpers.BuildEnv(t)
+	imgpkg := helpers.Imgpkg{T: t, L: *logger, ImgpkgPath: env.ImgpkgPath}
+	defer env.Cleanup()
+
+	t.Run("Image - copies the User Permission to group and other", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Skipping test as this is a known issue: https://github.com/vmware-tanzu/carvel-imgpkg/issues/270")
+		}
+
+		folder := env.Assets.CreateTempFolder("simple-image")
+		env.Assets.AddFileToFolderWithPermissions(filepath.Join(folder, "all-on-user-only"), "some text", 0755)
+		env.Assets.AddFileToFolderWithPermissions(filepath.Join(folder, "read-on-user-only"), "some text", 0455)
+		env.Assets.AddFileToFolderWithPermissions(filepath.Join(folder, "read-write-on-user-only"), "some text", 0655)
+
+		out := imgpkg.Run([]string{"push", "--tty", "-i", env.Image, "-f", folder})
+		imgDigest := fmt.Sprintf("@%s", helpers.ExtractDigest(t, out))
+
+		pullDir := env.Assets.CreateTempFolder("pull-dir-simple-image")
+		imageRef := fmt.Sprintf("%s%s", env.Image, imgDigest)
+		imgpkg.Run([]string{"pull", "-i", imageRef, "-o", pullDir})
+
+		info, err := os.Stat(filepath.Join(pullDir, "all-on-user-only"))
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0700).String(), (info.Mode() & 0700).String(), "user permission doesnt match")
+		assert.Equal(t, os.FileMode(0070).String(), (info.Mode() & 0070).String(), "group permission doesnt match")
+		assert.Equal(t, os.FileMode(0007).String(), (info.Mode() & 0007).String(), "other permission doesnt match")
+		info, err = os.Stat(filepath.Join(pullDir, "read-on-user-only"))
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0400).String(), (info.Mode() & 0700).String(), "user permission doesnt match")
+		assert.Equal(t, os.FileMode(0040).String(), (info.Mode() & 0070).String(), "group permission doesnt match")
+		assert.Equal(t, os.FileMode(0004).String(), (info.Mode() & 0007).String(), "other permission doesnt match")
+		info, err = os.Stat(filepath.Join(pullDir, "read-write-on-user-only"))
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0600).String(), (info.Mode() & 0700).String(), "user permission doesnt match")
+		assert.Equal(t, os.FileMode(0060).String(), (info.Mode() & 0070).String(), "group permission doesnt match")
+		assert.Equal(t, os.FileMode(0006).String(), (info.Mode() & 0007).String(), "other permission doesnt match")
+	})
+
+	t.Run("Bundle - copies the User Permission to group and other", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Skipping test as this is a known issue: https://github.com/vmware-tanzu/carvel-imgpkg/issues/270")
+		}
+
+		bundleDir := env.BundleFactory.CreateBundleDir(helpers.BundleYAML, helpers.ImagesYAML)
+		env.Assets.AddFileToFolderWithPermissions(filepath.Join(bundleDir, "all-on-user-only"), "some text", 0755)
+		env.Assets.AddFileToFolderWithPermissions(filepath.Join(bundleDir, "read-on-user-only"), "some text", 0455)
+		env.Assets.AddFileToFolderWithPermissions(filepath.Join(bundleDir, "read-write-on-user-only"), "some text", 0655)
+
+		out := imgpkg.Run([]string{"push", "--tty", "-b", env.Image, "-f", bundleDir})
+		imgDigest := fmt.Sprintf("@%s", helpers.ExtractDigest(t, out))
+
+		pullDir := env.Assets.CreateTempFolder("pull-dir-simple-image")
+		imageRef := fmt.Sprintf("%s%s", env.Image, imgDigest)
+		imgpkg.Run([]string{"pull", "-b", imageRef, "-o", pullDir})
+
+		info, err := os.Stat(filepath.Join(pullDir, "all-on-user-only"))
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0700).String(), (info.Mode() & 0700).String(), "user permission doesnt match")
+		assert.Equal(t, os.FileMode(0070).String(), (info.Mode() & 0070).String(), "group permission doesnt match")
+		assert.Equal(t, os.FileMode(0007).String(), (info.Mode() & 0007).String(), "other permission doesnt match")
+		info, err = os.Stat(filepath.Join(pullDir, "read-on-user-only"))
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0400).String(), (info.Mode() & 0700).String(), "user permission doesnt match")
+		assert.Equal(t, os.FileMode(0040).String(), (info.Mode() & 0070).String(), "group permission doesnt match")
+		assert.Equal(t, os.FileMode(0004).String(), (info.Mode() & 0007).String(), "other permission doesnt match")
+		info, err = os.Stat(filepath.Join(pullDir, "read-write-on-user-only"))
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0600).String(), (info.Mode() & 0700).String(), "user permission doesnt match")
+		assert.Equal(t, os.FileMode(0060).String(), (info.Mode() & 0070).String(), "group permission doesnt match")
+		assert.Equal(t, os.FileMode(0006).String(), (info.Mode() & 0007).String(), "other permission doesnt match")
+	})
 }

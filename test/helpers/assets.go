@@ -106,7 +106,14 @@ func (a *Assets) CreateAndCopySimpleApp(prefix string) string {
 	return outDir
 }
 
+// AddFileToFolder Adds a file to a folder with 0600 permission
 func (a *Assets) AddFileToFolder(path, content string) {
+	a.T.Helper()
+	a.AddFileToFolderWithPermissions(path, content, 0600)
+}
+
+// AddFileToFolderWithPermissions Adds a file to a folder and sets permissions
+func (a *Assets) AddFileToFolderWithPermissions(path, content string, perm os.FileMode) {
 	a.T.Helper()
 	subfolders, _ := filepath.Split(path)
 	if subfolders != "" {
@@ -114,6 +121,6 @@ func (a *Assets) AddFileToFolder(path, content string) {
 		require.NoError(a.T, err)
 	}
 
-	err := ioutil.WriteFile(path, []byte(content), 0600)
+	err := ioutil.WriteFile(path, []byte(content), perm)
 	require.NoError(a.T, err)
 }
