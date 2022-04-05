@@ -13,10 +13,10 @@ import (
 	// gcp credential provider via init()
 	_ "github.com/vdemeester/k8s-pkg-credentialprovider/gcp"
 
-	"github.com/go-logr/logr"
 	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
 )
 
 func init() {
-	klog.SetLogger(logr.Discard())
+	klog.SetLogger(klogr.New())
 }
